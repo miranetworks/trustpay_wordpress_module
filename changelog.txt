@@ -1,0 +1,3 @@
+*** TrustPay Changelog ***
+2014.05.13 - version 1.0
+ * First Release
