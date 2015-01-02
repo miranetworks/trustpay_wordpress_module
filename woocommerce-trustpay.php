@@ -9,17 +9,27 @@ Author URI: http://www.trsutpay.biz
 License: GPLv2 or later
 Text Domain: wctrustpay
 Dependency (Plugin): oauth-provider (https://wordpress.org/plugins/oauth2-provider/)
-Domain Path: /languages/ 
+Domain Path: /languages/
 */
 
 /**
 * Check if WooCommerce is active
 **/
-if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ) ) ) {
-    
+$single_check = in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ) );
+
+$network_check = false;
+if (is_multisite()) {
+  if ( ! function_exists( 'is_plugin_active_for_network' ) ) {
+    require_once( ABSPATH . '/wp-admin/includes/plugin.php' );
+  }
+  $network_check = is_plugin_active_for_network( 'woocommerce/woocommerce.php' );
+}
+
+if ( $single_check || $network_check ) {
+
     // Put your plugin code here.
     add_action( 'plugins_loaded', 'wctrustpay_gateway_load', 0 );
-    
+
     /**
     * WooCommerce fallback notice.
     */
@@ -49,7 +59,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 	  * @param array $methods
 	  * @return array
 	  */
-	  
+
 	  function wctrustpay_add_gateway( $methods ) {
 	      $methods[] = 'WC_Gateway_Trustpay';
 	      return $methods;
@@ -78,7 +88,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
                   $this->defaultfailureUrl   = str_replace('https:', 'http:', add_query_arg('wc-trustpay', 'trustpay_failure_result', home_url('/')));
 		  $this->method_title        = __( 'Trustpay', 'wctrustpay' );
                   $this->response_url        = add_query_arg( 'wc-api', 'WC_Gateway_Trustpay', home_url( '/' ) );
-                  
+
 		  // Load the form fields.
 		  $this->init_form_fields();
 
@@ -93,13 +103,13 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
                   $this->successpostbackurl = $this->settings['successpostbackurl'];
 		  $this->failurepostbackurl = $this->settings['failurepostbackurl'];
                   //$this->pendingpostbackurl = $this->settings['pendingpostbackurl'];
-		  
-                  
+
+
                   // Actions.
 		  add_action( 'woocommerce_api_wc_gateway_trustpay', array( $this, 'check_tpn_response' ) );
 		  add_action( 'valid_trustpay_tpn_request', array( $this, 'successful_request' ) );
 		  add_action( 'woocommerce_receipt_trustpay', array( $this, 'receipt_page' ) );
-		  
+
 		  if ( version_compare( WOOCOMMERCE_VERSION, '2.0.0', '>=' ) ) {
 		      add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( &$this, 'process_admin_options' ) );
 		  } else {
@@ -109,7 +119,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 		  // Valid for use.
 		  if ( ! $this->is_valid_for_use() )
 			$this->enabled = false;
-                  
+
 		  // Checking if vendor_key/app_key is not empty.
 		  if ( empty( $this->app_key ) ) {
 		      add_action( 'admin_notices', array( &$this, 'vendor_key_missing_message' ) );
@@ -127,7 +137,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 	      * @return bool
 	      */
 	      public function is_valid_for_use() {
-		  $is_available = false;                 
+		  $is_available = false;
                   if ($this->enabled == 'yes' && $this->settings['app_key'] != '')
 			$is_available = true;
                   return $is_available;
@@ -234,7 +244,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 		      )
 		  );
 	      }
-              
+
 	      /**
 	      * Process the payment and return the result.
 	      *
@@ -258,7 +268,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 	      public function receipt_page( $order ) {
                   echo $this->generate_truspay_form( $order );
 	      }
-	      
+
 	      /**
 	      * Adds error message when not configured the app_key.
 	      *
@@ -271,25 +281,25 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 
                 echo $html;
 	      }
-                            
+
               public function generate_truspay_form( $order_id ) {
                 global $woocommerce;
                 $order = new WC_Order( $order_id );
-		
+
                 //prepare the success order fallback url
                 if (empty($this->settings['successpostbackurl'])){
                     $successUrl = $this->get_return_url( $order );
                 }else{
                     $successUrl = $this->settings['successpostbackurl'];
 }
-                
+
                 //prepare the fail/cancel order fallback url
                 if (empty($this->settings['failurepostbackurl'])){
                     $cancelUrl = $order->get_cancel_order_url();
                 }else{
                     $cancelUrl = $this->settings['failurepostbackurl'];
                 }
-                
+
                 $this->data_to_send = array(
                     // TrustPay Account related details
                     'vendor_id' => $this->settings['app_key'],
@@ -339,12 +349,12 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
                  */
                 function check_tpn_request_is_valid($data){
                     global $woocommerce;
-                    
+
                     if (empty($data['tp_transaction_id'])){
                         $this->log->add( 'trustpay', 'TPN Request is empty.');
                         return FALSE;
                     }
-                    $params = array( 
+                    $params = array(
                         'amount'=> $data['amount'],
                         'application_id'=> $data['application_id'],
                         'consumermessage'=> $data['consumermessage'],
@@ -362,7 +372,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
                         'oauth_timestamp' => $data['oauth_timestamp'],
                         'oauth_version' => $data['oauth_version']
                         );
-             
+
                     //validate by calculating the signiture and matching it
                     $original_signature = $data['oauth_signature'];
 
@@ -375,19 +385,19 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
                        $shared_secret = $this->settings['sharedsecret'];
                        $notificationurl = $this->settings['notificationurl'];
                     }
-                    
-                    $consumer = new OP_OAuthConsumer($data['oauth_consumer_key'], $shared_secret, $notificationurl); 
+
+                    $consumer = new OP_OAuthConsumer($data['oauth_consumer_key'], $shared_secret, $notificationurl);
                     $request = new OP_OAuthRequest("GET", $notificationurl, $params);
-                    
+
                     $oauth_signature = urldecode($request->build_signature(new OP_OAuthSignatureMethod_HMAC_SHA1(), $consumer, NULL));
-                      
+
                     if ($original_signature === $oauth_signature){
                         return TRUE;
                     }else{
                         return FALSE;
                     }
                 }
-                
+
                 /**
                 * Check TrustPay TPN response.
                 *
@@ -402,7 +412,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
                         wp_die( "TrustPay TPN Request Failure", "TrustPay TPN", array( 'response' => 200 ) );
                     }
                 } // End check_tpn_response()
-                
+
                 /**
                 * Successful Payment!
                 *
@@ -425,7 +435,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
                         if ( 'yes' == $this->debug ) {
                             $this->log->add( 'trustpay', 'Payment status: ' . $posted['status'] );
                         }
-                        
+
                         switch ( $posted['status'] ) {
                             case 'success':
                                 // Check order not already completed
@@ -455,7 +465,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
                                     $order->update_status( 'on-hold', sprintf( __( 'Validation error: TrustPay amounts do not match (gross %s).', 'woocommerce' ), $posted['amount'] ) );
                                     exit;
                                 }
-                                
+
                                 if ( $posted['status'] == 'success' ) {
                                     $order->add_order_note( __( 'TPN payment completed', 'woocommerce' ) );
                                     $order->payment_complete();
@@ -478,18 +488,18 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
                         exit;
                     }
                 }
-            
+
                 /**
                  * Get the trustpay order processed by transaction_id
-                 * 
+                 *
                  * @param type $transaction_id
                  * @return \WC_Order
                  */
                 private function get_trustpay_order( $transaction_id) {
                     $order = new WC_Order( $transaction_id );
                     return $order;
-                }   
+                }
             }
-        }    
+        }
 }
 ?>
